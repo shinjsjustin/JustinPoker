@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poker App - Register</title>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <div class="container" x-data="registerApp()">
+        <div class="auth-card">
+            <h1>🃏 Join Poker App</h1>
+            <p class="auth-subtitle">Create your account and start playing!</p>
+            
+            <!-- Error/Success Messages -->
+            <div x-show="message" 
+                 x-text="message"
+                 :class="messageType === 'error' ? 'alert alert-error' : 'alert alert-success'"
+                 x-transition></div>
+            
+            <form @submit.prevent="handleRegister" class="auth-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input 
+                        type="text" 
+                        id="username" 
+                        x-model="form.username"
+                        :disabled="loading"
+                        required
+                        minlength="3"
+                        placeholder="Choose a username">
+                    <small class="form-help">At least 3 characters</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input 
+                        type="email" 
+                        id="email" 
+                        x-model="form.email"
+                        :disabled="loading"
+                        required
+                        placeholder="Enter your email address">
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input 
+                        type="password" 
+                        id="password" 
+                        x-model="form.password"
+                        :disabled="loading"
+                        required
+                        minlength="6"
+                        placeholder="Create a secure password">
+                    <small class="form-help">At least 6 characters</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirmPassword">Confirm Password</label>
+                    <input 
+                        type="password" 
+                        id="confirmPassword" 
+                        x-model="form.confirmPassword"
+                        :disabled="loading"
+                        required
+                        placeholder="Confirm your password">
+                    <small x-show="form.confirmPassword && form.password !== form.confirmPassword" 
+                           class="form-help error">Passwords don't match</small>
+                </div>
+                
+                <button 
+                    type="submit" 
+                    class="btn btn-primary btn-full"
+                    :disabled="loading || (form.password !== form.confirmPassword)">
+                    <span x-show="!loading">Create Account</span>
+                    <span x-show="loading">Creating Account...</span>
+                </button>
+            </form>
+            
+            <div class="auth-links">
+                <p>Already have an account? 
+                    <a href="login.html">Login here</a>
+                </p>
+                <p>
+                    <a href="../index.html">← Back to Welcome</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <script src="../javascript/auth.js"></script>
+    <script>
+        function registerApp() {
+            return {
+                form: {
+                    username: '',
+                    email: '',
+                    password: '',
+                    confirmPassword: ''
+                },
+                loading: false,
+                message: '',
+                messageType: '',
+                
+                init() {
+                    // Redirect if already logged in
+                    if (getAuthToken()) {
+                        window.location.href = 'home.html';
+                    }
+                },
+                
+                showMessage(text, type = 'error') {
+                    this.message = text;
+                    this.messageType = type;
+                    setTimeout(() => {
+                        this.message = '';
+                    }, 5000);
+                },
+                
+                validateForm() {
+                    if (!this.form.username || !this.form.email || !this.form.password || !this.form.confirmPassword) {
+                        this.showMessage('Please fill in all fields');
+                        return false;
+                    }
+                    
+                    if (this.form.username.length < 3) {
+                        this.showMessage('Username must be at least 3 characters long');
+                        return false;
+                    }
+                    
+                    if (this.form.password.length < 6) {
+                        this.showMessage('Password must be at least 6 characters long');
+                        return false;
+                    }
+                    
+                    if (this.form.password !== this.form.confirmPassword) {
+                        this.showMessage('Passwords do not match');
+                        return false;
+                    }
+                    
+                    // Basic email validation
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(this.form.email)) {
+                        this.showMessage('Please enter a valid email address');
+                        return false;
+                    }
+                    
+                    return true;
+                },
+                
+                async handleRegister() {
+                    if (!this.validateForm()) {
+                        return;
+                    }
+                    
+                    this.loading = true;
+                    this.message = '';
+                    
+                    try {
+                        const response = await fetch('/api/auth/register', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                username: this.form.username,
+                                email: this.form.email,
+                                password: this.form.password
+                            })
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (response.ok) {
+                            // Store token and user info
+                            localStorage.setItem('authToken', data.token);
+                            localStorage.setItem('userData', JSON.stringify(data.player));
+                            
+                            this.showMessage('Account created successfully! Redirecting...', 'success');
+                            
+                            // Redirect to home page
+                            setTimeout(() => {
+                                window.location.href = 'home.html';
+                            }, 1000);
+                        } else {
+                            this.showMessage(data.message || 'Registration failed');
+                        }
+                    } catch (error) {
+                        console.error('Registration error:', error);
+                        this.showMessage('Network error. Please try again.');
+                    } finally {
+                        this.loading = false;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

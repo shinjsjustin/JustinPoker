@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poker App - Home</title>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+    <div class="container" x-data="homeApp()">
+        <!-- Navigation Header -->
+        <header class="header">
+            <div class="nav-content">
+                <h1 class="logo">🃏 Poker App</h1>
+                <div class="nav-actions">
+                    <span class="welcome-text">Welcome, <strong x-text="user.username"></strong>!</span>
+                    <button @click="handleLogout" class="btn btn-outline">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- User Dashboard -->
+            <div class="dashboard-card">
+                <h2>Your Dashboard</h2>
+                <div class="user-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Username:</span>
+                        <span class="stat-value" x-text="user.username"></span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Email:</span>
+                        <span class="stat-value" x-text="user.email"></span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Chip Balance:</span>
+                        <span class="stat-value">$<span x-text="formatNumber(user.chip_balance || 1000)"></span></span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Member Since:</span>
+                        <span class="stat-value" x-text="formatDate(user.created_at)"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Game Actions -->
+            <div class="actions-grid">
+                <div class="action-card">
+                    <h3>🎮 Quick Play</h3>
+                    <p>Jump into a game immediately</p>
+                    <button class="btn btn-primary" @click="quickPlay">Play Now</button>
+                </div>
+                
+                <div class="action-card">
+                    <h3>🏆 Tournaments</h3>
+                    <p>Compete in scheduled tournaments</p>
+                    <button class="btn btn-secondary" @click="viewTournaments">View Tournaments</button>
+                </div>
+                
+                <div class="action-card">
+                    <h3>👥 Private Tables</h3>
+                    <p>Create or join private games</p>
+                    <button class="btn btn-secondary" @click="privateTables">Private Tables</button>
+                </div>
+                
+                <div class="action-card">
+                    <h3>📊 Statistics</h3>
+                    <p>View your game history and stats</p>
+                    <button class="btn btn-secondary" @click="viewStats">View Stats</button>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="activity-card">
+                <h3>🕒 Recent Activity</h3>
+                <div x-show="loading" class="loading">Loading your recent games...</div>
+                <div x-show="!loading && recentGames.length === 0" class="empty-state">
+                    <p>No recent games found. Start playing to see your activity here!</p>
+                </div>
+                <div x-show="!loading && recentGames.length > 0" class="activity-list">
+                    <template x-for="game in recentGames" :key="game.id">
+                        <div class="activity-item">
+                            <span class="activity-game" x-text="`Game #${game.id}`"></span>
+                            <span class="activity-result" x-text="game.result"></span>
+                            <span class="activity-date" x-text="formatDate(game.date)"></span>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="../javascript/auth.js"></script>
+    <script>
+        function homeApp() {
+            return {
+                user: {},
+                loading: true,
+                recentGames: [],
+                
+                async init() {
+                    // Check if user is logged in
+                    if (!getAuthToken()) {
+                        window.location.href = '../index.html';
+                        return;
+                    }
+                    
+                    // Load user data from localStorage first
+                    const userData = getUserData();
+                    if (userData) {
+                        this.user = userData;
+                    }
+                    
+                    // Fetch fresh profile data
+                    await this.loadUserProfile();
+                    await this.loadRecentGames();
+                },
+                
+                async loadUserProfile() {
+                    try {
+                        const response = await fetch('/api/auth/profile', {
+                            headers: {
+                                'Authorization': `Bearer ${getAuthToken()}`
+                            }
+                        });
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.user = data.player;
+                            // Update localStorage with fresh data
+                            localStorage.setItem('userData', JSON.stringify(data.player));
+                        } else if (response.status === 401) {
+                            // Token expired, redirect to login
+                            this.handleLogout();
+                        }
+                    } catch (error) {
+                        console.error('Failed to load profile:', error);
+                    }
+                },
+                
+                async loadRecentGames() {
+                    // Simulate loading recent games (you'll implement this later)
+                    this.loading = true;
+                    
+                    // Simulate API delay
+                    setTimeout(() => {
+                        // Mock data for now - replace with real API call later
+                        this.recentGames = [
+                            { id: 1, result: 'Won $250', date: new Date(Date.now() - 86400000) },
+                            { id: 2, result: 'Lost $100', date: new Date(Date.now() - 172800000) },
+                            { id: 3, result: 'Won $450', date: new Date(Date.now() - 259200000) }
+                        ];
+                        this.loading = false;
+                    }, 1000);
+                },
+                
+                formatNumber(num) {
+                    return num ? num.toLocaleString() : '0';
+                },
+                
+                formatDate(date) {
+                    if (!date) return 'N/A';
+                    return new Date(date).toLocaleDateString();
+                },
+                
+                async handleLogout() {
+                    try {
+                        // Call logout endpoint
+                        await fetch('/api/auth/logout', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${getAuthToken()}`
+                            }
+                        });
+                    } catch (error) {
+                        console.error('Logout error:', error);
+                    }
+                    
+                    // Clear local storage and redirect
+                    localStorage.removeItem('authToken');
+                    localStorage.removeItem('userData');
+                    window.location.href = '../index.html';
+                },
+                
+                // Game action handlers (to be implemented later)
+                quickPlay() {
+                    alert('Quick Play feature coming soon!');
+                },
+                
+                viewTournaments() {
+                    alert('Tournament feature coming soon!');
+                },
+                
+                privateTables() {
+                    alert('Private Tables feature coming soon!');
+                },
+                
+                viewStats() {
+                    alert('Statistics feature coming soon!');
+                }
+            }
+        }
+    </script>
+</body>
+</html>

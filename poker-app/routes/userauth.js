@@ -214,5 +214,58 @@ router.get('/verify', authenticateToken, (req, res) => {
     });
 });
 
+// Add balance endpoint
+router.post('/add-balance', authenticateToken, async (req, res) => {
+    try {
+        const { amount } = req.body;
+        const playerId = req.user.playerId;
+
+        // Validate amount
+        if (!amount || amount <= 0 || !Number.isInteger(amount)) {
+            return res.status(400).json({ 
+                message: 'Amount must be a positive integer' 
+            });
+        }
+
+        if (amount > 10000) {
+            return res.status(400).json({ 
+                message: 'Maximum add amount is $10,000' 
+            });
+        }
+
+        // Update player's chip balance
+        const [result] = await db.execute(
+            'UPDATE players SET chip_balance = chip_balance + ? WHERE player_id = ?',
+            [amount, playerId]
+        );
+
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ 
+                message: 'Player not found' 
+            });
+        }
+
+        // Get updated balance
+        const [players] = await db.execute(
+            'SELECT chip_balance FROM players WHERE player_id = ?',
+            [playerId]
+        );
+
+        const newBalance = players[0].chip_balance;
+
+        res.json({
+            message: `Successfully added $${amount} to your balance`,
+            chip_balance: newBalance,
+            amount_added: amount
+        });
+
+    } catch (error) {
+        console.error('Add balance error:', error);
+        res.status(500).json({ 
+            message: 'Internal server error while adding balance' 
+        });
+    }
+});
+
 module.exports = { router, authenticateToken };
 

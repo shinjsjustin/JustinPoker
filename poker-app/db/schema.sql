@@ -61,7 +61,7 @@ CREATE TABLE games (
   table_id        INT     NOT NULL,
   pot             INT     NOT NULL DEFAULT 0,
   community_cards JSON,
-  stage           ENUM('pre_flop','flop','turn','river','showdown') NOT NULL DEFAULT 'pre_flop',
+  stage           ENUM('waiting','pre_flop','flop','turn','river','showdown','game_over') NOT NULL DEFAULT 'waiting',
   dealer_seat     TINYINT NOT NULL,
   active_seat     TINYINT,
   started_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -96,7 +96,7 @@ CREATE TABLE actions (
   player_id   INT  NOT NULL,
   action_type ENUM('fold','check','call','raise','all_in','blind') NOT NULL,
   amount      INT  NOT NULL DEFAULT 0,
-  stage       ENUM('pre_flop','flop','turn','river') NOT NULL,
+  stage       ENUM('waiting','pre_flop','flop','turn','river','showdown','game_over') NOT NULL,
   acted_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   PRIMARY KEY (action_id),

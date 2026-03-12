@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Poker Game</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-page:       #0f1117;
+      --bg-surface:    #181c26;
+      --bg-raised:     #1f2433;
+      --border:        rgba(255,255,255,0.08);
+      --border-strong: rgba(255,255,255,0.15);
+      --text-primary:  #f0f2f7;
+      --text-secondary:#8b92a8;
+      --text-muted:    #4e546b;
+      --accent-info:   #4a9eff;
+      --accent-warn:   #f5a623;
+      --accent-danger: #e05252;
+      --accent-success:#3ecf8e;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+    }
+
+    body {
+      background: var(--bg-page);
+      color: var(--text-primary);
+      font-family: 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    /* ── Layout ─────────────────────────────────────────── */
+    .game-wrap {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .game-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 12px 16px;
+      margin-bottom: 10px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .back-btn {
+      padding: 6px 12px;
+      background: var(--bg-raised);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 13px;
+      transition: background 0.15s;
+    }
+    .back-btn:hover { background: rgba(255,255,255,0.06); }
+
+    .user-info { font-size: 12px; color: var(--text-secondary); }
+    .user-info strong { color: var(--text-primary); }
+
+    /* ── Sections ─────────────────────────────────────── */
+    .section {
+      background: var(--bg-surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 12px 14px;
+    }
+
+    .label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    /* ── Loading & Error States ──────────────────────── */
+    .loading-state, .error-state {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--text-secondary);
+    }
+    .error-state { color: var(--accent-danger); }
+
+    .retry-btn {
+      margin-top: 1rem;
+      padding: 8px 16px;
+      background: var(--bg-raised);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-md);
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+
+    /* ── Stage bar ────────────────────────────────────── */
+    .stage-bar {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .stage-pill {
+      font-size: 11px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: var(--bg-raised);
+      color: var(--text-muted);
+      border: 0.5px solid var(--border);
+    }
+
+    .stage-pill.active {
+      background: rgba(74,158,255,0.15);
+      color: var(--accent-info);
+      border-color: rgba(74,158,255,0.3);
+      font-weight: 500;
+    }
+
+    /* ── Community cards ──────────────────────────────── */
+    .community {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .pot-line {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 0.5px solid var(--border);
+    }
+
+    .pot-label { font-size: 12px; color: var(--text-secondary); }
+    .pot-amount { font-size: 20px; font-weight: 600; }
+
+    /* ── Playing cards ────────────────────────────────── */
+    .card {
+      width: 38px;
+      height: 54px;
+      border-radius: 5px;
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+    }
+
+    .card.face-down {
+      background: var(--bg-raised);
+      border-color: var(--border);
+    }
+
+    .card .rank { font-size: 15px; font-weight: 700; line-height: 1; color: #111; }
+    .card .suit { font-size: 13px; line-height: 1; }
+    .card.red .rank, .card.red .suit { color: #c0392b; }
+    .card.black .rank, .card.black .suit { color: #111; }
+    .card.face-down .dot { font-size: 20px; color: var(--text-muted); }
+
+    /* Big cards (your hand) */
+    .big-card {
+      width: 52px;
+      height: 72px;
+      border-radius: 6px;
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+    .big-card .rank { font-size: 22px; font-weight: 700; color: #111; line-height: 1; }
+    .big-card .suit { font-size: 18px; line-height: 1; }
+    .big-card.red .rank, .big-card.red .suit { color: #c0392b; }
+    .big-card.black .rank, .big-card.black .suit { color: #111; }
+
+    /* Small cards (player rows) */
+    .sm-card {
+      width: 22px;
+      height: 31px;
+      border-radius: 3px;
+      background: #fff;
+      border: 0.5px solid rgba(0,0,0,0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+    }
+    .sm-card .rank { font-size: 9px; font-weight: 700; line-height: 1; color: #111; }
+    .sm-card .suit { font-size: 8px; line-height: 1; }
+    .sm-card.red .rank, .sm-card.red .suit { color: #c0392b; }
+    .sm-card.black .rank, .sm-card.black .suit { color: #111; }
+    .sm-card.face-down {
+      background: var(--bg-raised);
+      border-color: var(--border);
+    }
+
+    /* ── Player rows ──────────────────────────────────── */
+    .players-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .player-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: var(--radius-md);
+      border: 0.5px solid var(--border);
+      background: var(--bg-raised);
+      transition: border-color 0.15s, background 0.15s;
+    }
+
+    .player-row.is-turn {
+      border-color: rgba(74,158,255,0.4);
+      background: rgba(74,158,255,0.07);
+    }
+
+    .player-row.is-folded {
+      opacity: 0.4;
+    }
+
+    .player-row.is-allin {
+      border-color: rgba(245,166,35,0.35);
+    }
+
+    .avatar {
+      width: 30px; height: 30px;
+      border-radius: 50%;
+      background: var(--bg-surface);
+      border: 0.5px solid var(--border-strong);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 600;
+      color: var(--text-secondary);
+      flex-shrink: 0;
+    }
+
+    .player-meta { flex: 1; min-width: 0; }
+    .player-name {
+      font-size: 13px; font-weight: 500;
+      display: flex; align-items: center; gap: 5px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .player-chips { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+
+    .player-bet {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-warn);
+      min-width: 28px;
+      text-align: right;
+    }
+
+    .player-cards { display: flex; gap: 3px; }
+
+    /* ── Badges ───────────────────────────────────────── */
+    .badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 10px;
+      letter-spacing: 0.03em;
+      white-space: nowrap;
+    }
+    .badge-d   { background: rgba(245,166,35,0.15); color: var(--accent-warn); border: 0.5px solid rgba(245,166,35,0.3); }
+    .badge-sb  { background: var(--bg-surface); color: var(--text-secondary); border: 0.5px solid var(--border); }
+    .badge-bb  { background: var(--bg-surface); color: var(--text-secondary); border: 0.5px solid var(--border); }
+    .badge-ai  { background: rgba(245,166,35,0.15); color: var(--accent-warn); border: 0.5px solid rgba(245,166,35,0.3); }
+
+    .status-text { font-size: 11px; color: var(--text-muted); margin-left: auto; }
+
+    /* ── Your hand ────────────────────────────────────── */
+    .hand-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .hand-info { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+    .hand-info strong { color: var(--text-primary); }
+
+    .bet-summary {
+      display: flex;
+      gap: 20px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 0.5px solid var(--border);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .bet-summary strong { color: var(--text-primary); font-weight: 500; }
+
+    /* ── Action panel ─────────────────────────────────── */
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px 8px;
+      border-radius: var(--radius-md);
+      border: 0.5px solid var(--border-strong);
+      background: var(--bg-raised);
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.1s, border-color 0.1s;
+    }
+    .btn:hover { background: rgba(255,255,255,0.06); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-fold   { color: var(--accent-danger);  border-color: rgba(224,82,82,0.3);   background: rgba(224,82,82,0.07); }
+    .btn-fold:hover { background: rgba(224,82,82,0.14); }
+
+    .btn-call   { color: var(--accent-success); border-color: rgba(62,207,142,0.3);  background: rgba(62,207,142,0.07); }
+    .btn-call:hover { background: rgba(62,207,142,0.14); }
+
+    .btn-raise  { color: var(--accent-info);    border-color: rgba(74,158,255,0.3);  background: rgba(74,158,255,0.07); }
+    .btn-raise:hover { background: rgba(74,158,255,0.14); }
+
+    .raise-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .raise-row label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+
+    .raise-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent-info);
+    }
+
+    .raise-row input[type="number"] {
+      width: 80px;
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      border: 0.5px solid var(--border-strong);
+      background: var(--bg-raised);
+      color: var(--text-primary);
+      font-size: 13px;
+    }
+
+    .raise-confirm {
+      padding: 8px 14px;
+      border-radius: var(--radius-md);
+      border: 0.5px solid rgba(74,158,255,0.3);
+      background: rgba(74,158,255,0.1);
+      color: var(--accent-info);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .raise-confirm:hover { background: rgba(74,158,255,0.2); }
+
+    /* ── Pot split indicator (side pots) ─────────────── */
+    .pots { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+    .pot-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .pot-row strong { color: var(--text-primary); }
+
+    /* ── Timer bar ────────────────────────────────────── */
+    .timer-bar {
+      height: 2px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .timer-bar-fill {
+      height: 100%;
+      background: var(--accent-info);
+      border-radius: 2px;
+      transition: width 1s linear;
+    }
+
+    /* ── Scrollable on small screens ─────────────────── */
+    @media (max-height: 700px) {
+      .game-wrap { padding-bottom: 2rem; }
+    }
+  </style>
+</head>
+<body x-data="pokerGame()">
+
+  <div class="game-wrap">
+    <!-- Header -->
+    <div class="game-header">
+      <a href="home.html" class="back-btn">← Back</a>
+      <div class="user-info" x-show="user">
+        <strong x-text="user?.username || 'Player'"></strong> • 
+        <span x-text="(user?.chip_balance || 0).toLocaleString()"></span> chips
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div x-show="loading" class="loading-state">
+      <div>Loading game...</div>
+    </div>
+
+    <!-- Error State -->
+    <div x-show="error && !loading" class="error-state">
+      <div x-text="error"></div>
+      <button class="retry-btn" @click="reloadGame">Retry</button>
+    </div>
+
+    <!-- Game Content -->
+    <div x-show="!loading && !error && game">
+
+      <!-- ① Game state: stage + community cards + pot -->
+      <div class="section">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div class="label" style="margin-bottom:0;" x-text="game?.tableName || 'Poker Game'"></div>
+          <div style="font-size:11px; color:var(--text-muted);" x-show="game">
+            Blinds <span x-text="game.smallBlind"></span>/<span x-text="game.bigBlind"></span>
+            &nbsp;·&nbsp;
+            <span x-text="game.players?.length || 0"></span> players
+          </div>
+        </div>
+
+        <div class="stage-bar">
+          <template x-for="s in stages" :key="s">
+            <span class="stage-pill" :class="{ active: game?.stage === s }" x-text="s.replace('_', '-')"></span>
+          </template>
+        </div>
+
+        <div class="community">
+          <template x-for="(card, i) in communityDisplay" :key="i">
+            <div class="card" :class="card.color">
+              <template x-if="!card.faceDown">
+                <span class="rank" x-text="card.rank"></span>
+              </template>
+              <template x-if="!card.faceDown">
+                <span class="suit" x-text="card.suit"></span>
+              </template>
+              <template x-if="card.faceDown">
+                <span class="dot">·</span>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <!-- Main pot (or multiple pots if side pots exist) -->
+        <template x-if="game?.pot">
+          <div class="pot-line">
+            <span class="pot-label">pot</span>
+            <span class="pot-amount" x-text="(game.pot || 0).toLocaleString() + ' chips'"></span>
+          </div>
+        </template>
+      </div>
+
+      <!-- ② Player list -->
+      <div class="section" x-show="game?.players?.length > 0">
+        <div class="label">players</div>
+        <div class="players-list">
+          <template x-for="p in game.players" :key="p.player_id">
+            <div class="player-row"
+                 :class="{
+                   'is-turn':   p.player_id === game.activePlayerId,
+                   'is-folded': p.is_folded,
+                   'is-allin':  p.is_all_in && !p.is_folded
+                 }">
+
+              <div class="avatar" x-text="initials(p.username)"></div>
+
+              <div class="player-meta">
+                <div class="player-name">
+                  <span x-text="p.username"></span>
+                  <span class="badge badge-d"  x-show="p.seat_number === game.dealerSeat">D</span>
+                  <span class="badge badge-sb" x-show="p.seat_number === game.sbSeat">SB</span>
+                  <span class="badge badge-bb" x-show="p.seat_number === game.bbSeat">BB</span>
+                  <span class="badge badge-ai" x-show="p.is_all_in && !p.is_folded">all-in</span>
+                </div>
+                <div class="player-chips" x-text="(p.chips_end || p.chips_start || 0).toLocaleString() + ' chips'"></div>
+              </div>
+
+              <!-- Their hole cards (face-down unless showdown or it's you) -->
+              <div class="player-cards" x-show="!p.is_folded">
+                <template x-if="p.hole_cards && p.hole_cards.length && (p.player_id === myPlayerId || game.stage === 'showdown')">
+                  <template x-for="card in parseCards(p.hole_cards)" :key="card.raw">
+                    <div class="sm-card" :class="card.color">
+                      <span class="rank" x-text="card.rank"></span>
+                      <span class="suit" x-text="card.suit"></span>
+                    </div>
+                  </template>
+                </template>
+                <template x-if="!p.hole_cards || !p.hole_cards.length || (p.player_id !== myPlayerId && game.stage !== 'showdown')">
+                  <div style="display:flex;gap:3px;">
+                    <div class="sm-card face-down"></div>
+                    <div class="sm-card face-down"></div>
+                  </div>
+                </template>
+              </div>
+
+              <!-- Current bet this round -->
+              <div class="player-bet" x-show="p.current_bet > 0" x-text="p.current_bet"></div>
+              <div class="status-text" x-show="p.is_folded">folded</div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- ③ Your hand (only shown when you're in the hand) -->
+      <div class="section" x-show="myPlayer && !myPlayer.is_folded">
+        <div class="label">your hand</div>
+        <div class="hand-row">
+          <template x-if="myPlayer?.hole_cards">
+            <template x-for="card in parseCards(myPlayer.hole_cards)" :key="card.raw">
+              <div class="big-card" :class="card.color">
+                <span class="rank" x-text="card.rank"></span>
+                <span class="suit" x-text="card.suit"></span>
+              </div>
+            </template>
+          </template>
+          <div class="hand-info" x-show="myHandLabel">
+            <strong x-text="myHandLabel"></strong>
+          </div>
+        </div>
+        <template x-if="myPlayer">
+          <div class="bet-summary">
+            <span>current bet: <strong x-text="myPlayer.current_bet || 0"></strong></span>
+            <span>to call: <strong x-text="toCall"></strong></span>
+            <span>stack: <strong x-text="(myPlayer.chips_end || myPlayer.chips_start || 0).toLocaleString()"></strong></span>
+          </div>
+        </template>
+      </div>
+
+      <!-- ④ Action panel (only when it's your turn) -->
+      <div class="section" x-show="isMyTurn && !actionDisabled">
+        <div class="label">your action</div>
+        <div class="action-buttons">
+          <button class="btn btn-fold" @click="act('fold')" :disabled="actionInProgress">fold</button>
+          <button class="btn btn-call"
+                  x-text="toCall === 0 ? 'check' : 'call ' + toCall"
+                  @click="act(toCall === 0 ? 'check' : 'call')" 
+                  :disabled="actionInProgress"></button>
+          <button class="btn btn-raise" @click="toggleRaise" :disabled="actionInProgress || !canRaise">
+            <span x-text="showRaise ? 'cancel' : 'raise'"></span>
+          </button>
+        </div>
+
+        <div class="raise-row" x-show="showRaise">
+          <label>raise to</label>
+          <input type="range"
+                 :min="minRaise"
+                 :max="myPlayer ? (myPlayer.chips_end || myPlayer.chips_start || 0) : 0"
+                 x-model.number="raiseAmount"
+                 step="10" />
+          <input type="number"
+                 :min="minRaise"
+                 :max="myPlayer ? (myPlayer.chips_end || myPlayer.chips_start || 0) : 0"
+                 x-model.number="raiseAmount"
+                 step="10" />
+          <button class="raise-confirm" @click="act('raise')" :disabled="actionInProgress">confirm ↑</button>
+        </div>
+
+        <!-- Turn timer -->
+        <div class="timer-bar" x-show="game.turnTimeSeconds > 0">
+          <div class="timer-bar-fill" :style="'width:' + timerPct + '%'"></div>
+        </div>
+      </div>
+
+      <!-- Waiting message when not your turn -->
+      <div class="section" x-show="!isMyTurn && myPlayer && !myPlayer.is_folded">
+        <div class="label">waiting</div>
+        <div style="text-align: center; color: var(--text-secondary); padding: 1rem 0;">
+          <span x-show="game.activePlayerId">Waiting for <strong x-text="activePlayerName"></strong> to act...</span>
+          <span x-show="!game.activePlayerId">Waiting for next hand...</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="../javascript/auth.js"></script>
+  <script>
+    function pokerGame() {
+      return {
+        // ── Stages ─────────────────────────────────────────
+        stages: ['pre_flop', 'flop', 'turn', 'river', 'showdown'],
+
+        // ── UI state ───────────────────────────────────────
+        loading: true,
+        error: null,
+        user: null,
+        game: null,
+        tableId: null,
+        gameId: null,
+        myPlayerId: null,
+        pollingInterval: null,
+        
+        // Action state
+        showRaise: false,
+        raiseAmount: 0,
+        actionInProgress: false,
+        timerPct: 100,
+        myHandLabel: '', // Could be used for hand strength display
+
+        // ── Computed ───────────────────────────────────────
+        get myPlayer() {
+          if (!this.game?.players || !this.myPlayerId) return null;
+          return this.game.players.find(p => p.player_id === this.myPlayerId) || null;
+        },
+
+        get isMyTurn() {
+          return this.game?.active_player_id === this.myPlayerId && 
+                 this.game?.stage !== 'showdown' && 
+                 this.myPlayer && !this.myPlayer.is_folded;
+        },
+
+        get actionDisabled() {
+          return this.actionInProgress || !this.game || this.game.stage === 'showdown';
+        },
+
+        get toCall() {
+          if (!this.game?.players || !this.myPlayer) return 0;
+          const maxBet = Math.max(...this.game.players.map(p => p.current_bet || 0));
+          return Math.max(0, maxBet - (this.myPlayer.current_bet || 0));
+        },
+
+        get minRaise() {
+          const bigBlind = this.game?.big_blind || 20;
+          return this.toCall + bigBlind;
+        },
+
+        get canRaise() {
+          if (!this.myPlayer) return false;
+          const stack = this.myPlayer.chips_end || this.myPlayer.chips_start || 0;
+          return stack > this.toCall;
+        },
+
+        get activePlayerName() {
+          if (!this.game?.players || !this.game?.active_player_id) return '';
+          const player = this.game.players.find(p => p.player_id === this.game.active_player_id);
+          return player?.username || '';
+        },
+
+        get communityDisplay() {
+          const cards = this.game?.community_cards || [];
+          // Show 5 card slots total, face-down for unrevealed cards
+          const displayCards = [];
+          for (let i = 0; i < 5; i++) {
+            if (i < cards.length && cards[i]) {
+              displayCards.push({ faceDown: false, ...this.parseCard(cards[i]) });
+            } else {
+              displayCards.push({ faceDown: true });
+            }
+          }
+          return displayCards;
+        },
+
+        // ── Helpers ────────────────────────────────────────
+        initials(name) {
+          return name ? name.slice(0, 2).toUpperCase() : '??';
+        },
+
+        // Parse a single card code like "Ah", "Kd", "10c", "Ts"
+        parseCard(code) {
+          if (!code) return { faceDown: true };
+          const suits = { h: '♥', d: '♦', c: '♣', s: '♠' };
+          const redSuits = new Set(['h', 'd']);
+          const suitChar = code[code.length - 1].toLowerCase();
+          const rank = code.slice(0, -1).toUpperCase().replace('T', '10');
+          return {
+            raw: code,
+            rank,
+            suit: suits[suitChar] || suitChar,
+            color: redSuits.has(suitChar) ? 'red' : 'black',
+            faceDown: false,
+          };
+        },
+
+        // Parse an array of card codes (from hole_cards JSON column)
+        parseCards(cards) {
+          if (!cards || !cards.length) return [];
+          return cards.map(c => this.parseCard(c));
+        },
+
+        toggleRaise() {
+          this.showRaise = !this.showRaise;
+          if (this.showRaise) {
+            this.raiseAmount = this.minRaise;
+          }
+        },
+
+        // ── API Methods ────────────────────────────────────
+        async act(type) {
+          if (this.actionInProgress || !this.gameId) return;
+
+          this.actionInProgress = true;
+          try {
+            const payload = {
+              game_id: this.gameId,
+              player_id: this.myPlayerId,
+              action_type: type === 'check' ? 'check' : type,
+              amount: type === 'raise' ? this.raiseAmount : type === 'call' ? this.toCall : 0,
+              stage: this.game.stage
+            };
+
+            console.log('Sending action:', payload);
+
+            const response = await authenticatedFetch('/api/actions', {
+              method: 'POST',
+              body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+              throw new Error(`Action failed: ${response.status} ${response.statusText}`);
+            }
+
+            // Reset UI state
+            this.showRaise = false;
+            
+            // Refresh game state immediately
+            await this.fetchGameState();
+
+          } catch (error) {
+            console.error('Action error:', error);
+            this.error = error.message;
+          } finally {
+            this.actionInProgress = false;
+          }
+        },
+
+        async fetchGameState() {
+          if (!this.gameId) return;
+
+          try {
+            // Fetch both game state and table info
+            const [gameRes, tableRes] = await Promise.all([
+              authenticatedFetch(`/api/games/${this.gameId}`),
+              authenticatedFetch(`/api/tables/${this.tableId}`)
+            ]);
+
+            if (!gameRes.ok || !tableRes.ok) {
+              throw new Error('Failed to fetch game state');
+            }
+
+            const [gameData, tableData] = await Promise.all([
+              gameRes.json(),
+              tableRes.json()
+            ]);
+
+            // Merge data into expected format
+            this.game = {
+              ...gameData,
+              tableName: tableData.name,
+              smallBlind: tableData.small_blind,
+              bigBlind: tableData.big_blind,
+              small_blind: tableData.small_blind,
+              big_blind: tableData.big_blind,
+              players: gameData.players || [],
+              community_cards: gameData.community_cards || [],
+              active_player_id: gameData.active_seat ? this.findPlayerBySeat(gameData.active_seat) : null
+            };
+
+            this.error = null;
+
+          } catch (error) {
+            console.error('Failed to fetch game state:', error);
+            this.error = error.message;
+          }
+        },
+
+        findPlayerBySeat(seatNumber) {
+          if (!this.game?.players || !seatNumber) return null;
+          const player = this.game.players.find(p => p.seat_number === seatNumber);
+          return player?.player_id || null;
+        },
+
+        async loadUserInfo() {
+          try {
+            const userData = getUserData();
+            if (userData) {
+              this.user = userData;
+              this.myPlayerId = userData.player_id;
+            }
+          } catch (error) {
+            console.error('Failed to load user info:', error);
+          }
+        },
+
+        startPolling() {
+          // Poll every 2 seconds for game state updates
+          this.pollingInterval = setInterval(async () => {
+            if (!this.loading && this.gameId) {
+              await this.fetchGameState();
+            }
+          }, 2000);
+        },
+
+        stopPolling() {
+          if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+            this.pollingInterval = null;
+          }
+        },
+
+        async reloadGame() {
+          this.loading = true;
+          this.error = null;
+          await this.init();
+        },
+
+        // ── Init ───────────────────────────────────────────
+        async init() {
+          try {
+            // Check authentication
+            if (!isAuthenticated()) {
+              window.location.href = 'login.html';
+              return;
+            }
+
+            // Load user info
+            await this.loadUserInfo();
+
+            // Get table and game IDs from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            this.tableId = urlParams.get('tableId');
+            this.gameId = urlParams.get('gameId');
+
+            if (!this.tableId) {
+              throw new Error('No table ID provided');
+            }
+
+            // If no gameId provided, try to find active game on table
+            if (!this.gameId) {
+              const tableRes = await authenticatedFetch(`/api/tables/${this.tableId}`);
+              if (!tableRes.ok) {
+                throw new Error('Failed to fetch table info');
+              }
+              // You might need to add an endpoint to get active game for a table
+              // For now, we'll show error if no gameId
+              throw new Error('No active game found');
+            }
+
+            // Load initial game state
+            await this.fetchGameState();
+
+            // Start polling for updates
+            this.startPolling();
+
+            // Add beforeunload handler to handle leaving
+            this.setupBeforeUnload();
+
+          } catch (error) {
+            console.error('Initialization error:', error);
+            this.error = error.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        setupBeforeUnload() {
+          // Only leave table if navigating away from game, not to home
+          window.addEventListener('beforeunload', (event) => {
+            // This will be fired when navigating away, closing tab, etc
+            if (this.tableId && getAuthToken()) {
+              // Use POST instead of DELETE for beacon
+              const formData = new FormData();
+              formData.append('auth', 'Bearer ' + getAuthToken());
+              navigator.sendBeacon('/api/tables/' + this.tableId + '/leave', formData);
+            }
+          });
+
+          // Also handle navigation within the app
+          window.addEventListener('unload', () => {
+            if (this.tableId && getAuthToken()) {
+              const formData = new FormData();
+              formData.append('auth', 'Bearer ' + getAuthToken());
+              navigator.sendBeacon('/api/tables/' + this.tableId + '/leave', formData);
+            }
+          });
+        },
+
+        // Cleanup when component is destroyed
+        destroy() {
+          this.stopPolling();
+        }
+      };
+    }
+  </script>
+</body>
+</html>

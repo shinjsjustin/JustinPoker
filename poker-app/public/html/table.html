@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Table Lobby - Poker App</title>
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="../css/styles.css">
+    <style>
+        :root {
+            --bg-page: #0f1117;
+            --bg-surface: #181c26;
+            --bg-raised: #1f2433;
+            --border: rgba(255,255,255,0.08);
+            --text-primary: #f0f2f7;
+            --text-secondary: #8b92a8;
+            --text-muted: #4e546b;
+            --accent-success: #3ecf8e;
+            --accent-info: #4a9eff;
+            --radius-md: 10px;
+        }
+
+        body {
+            background: var(--bg-page);
+            color: var(--text-primary);
+            font-family: system-ui, sans-serif;
+            margin: 0;
+            padding: 1rem;
+        }
+
+        .table-lobby {
+            max-width: 600px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--bg-surface);
+            border: 0.5px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1rem 1.25rem;
+        }
+
+        .back-btn {
+            padding: 0.5rem 1rem;
+            background: var(--bg-raised);
+            border: 0.5px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            transition: background 0.15s;
+        }
+        .back-btn:hover { background: rgba(255,255,255,0.06); }
+
+        .table-card {
+            background: var(--bg-surface);
+            border: 0.5px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+        }
+
+        .table-info h2 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.5rem;
+        }
+
+        .table-meta {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        .seats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin: 1.5rem 0;
+        }
+
+        .seat {
+            background: var(--bg-raised);
+            border: 0.5px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .seat.occupied {
+            border-color: var(--accent-success);
+            background: rgba(62, 207, 142, 0.05);
+        }
+
+        .seat.you {
+            border-color: var(--accent-info);
+            background: rgba(74, 158, 255, 0.05);
+        }
+
+        .seat-number {
+            position: absolute;
+            top: 4px;
+            left: 6px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .seat-player {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .seat-chips {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .seat-empty {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .action-section {
+            background: var(--bg-surface);
+            border: 0.5px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 1.25rem;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.15s;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: var(--accent-success);
+            color: white;
+        }
+        .btn-primary:hover:not(:disabled) { 
+            background: #2eb376; 
+        }
+
+        .btn-secondary {
+            background: var(--bg-raised);
+            color: var(--text-primary);
+            border: 0.5px solid var(--border);
+        }
+        .btn-secondary:hover:not(:disabled) { 
+            background: rgba(255,255,255,0.06); 
+        }
+
+        .btn-danger {
+            background: rgba(224, 82, 82, 0.1);
+            color: #e05252;
+            border: 0.5px solid rgba(224, 82, 82, 0.3);
+        }
+        .btn-danger:hover:not(:disabled) { 
+            background: rgba(224, 82, 82, 0.2); 
+        }
+
+        .game-status {
+            text-align: center;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 8px;
+            background: rgba(74, 158, 255, 0.1);
+            border: 0.5px solid rgba(74, 158, 255, 0.3);
+            color: var(--accent-info);
+        }
+
+        .loading { 
+            text-align: center; 
+            color: var(--text-secondary); 
+            padding: 2rem; 
+        }
+
+        .error { 
+            text-align: center; 
+            color: #e05252; 
+            padding: 1rem;
+            background: rgba(224, 82, 82, 0.1);
+            border: 0.5px solid rgba(224, 82, 82, 0.3);
+            border-radius: 8px;
+        }
+
+        @media (max-width: 600px) {
+            .seats-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body x-data="tableLobby()">
+    <div class="table-lobby">
+        <!-- Header -->
+        <div class="header">
+            <a href="home.html" class="back-btn">← Back to Home</a>
+            <div class="user-info" x-show="user">
+                <strong x-text="user?.username || 'Player'"></strong> • 
+                <span x-text="(user?.chip_balance || 0).toLocaleString()"></span> chips
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="loading" class="loading">
+            Loading table...
+        </div>
+
+        <!-- Error State -->
+        <div x-show="error && !loading" class="error" x-text="error"></div>
+
+        <!-- Table Content -->
+        <div x-show="!loading && !error && table">
+            <!-- Table Info -->
+            <div class="table-card">
+                <div class="table-info">
+                    <h2 x-text="table?.name || 'Poker Table'"></h2>
+                    <div class="table-meta">
+                        <span>Blinds: <strong x-text="table?.small_blind || 10"></strong>/<strong x-text="table?.big_blind || 20"></strong></span>
+                        <span>Players: <strong x-text="(table?.current_players || 0) + '/' + (table?.max_players || 9)"></strong></span>
+                        <span>Status: <strong x-text="table?.status || 'waiting'"></strong></span>
+                    </div>
+                </div>
+
+                <!-- Seats -->
+                <div class="seats-grid">
+                    <template x-for="seat in seats" :key="seat.number">
+                        <div class="seat" 
+                             :class="{ 
+                                 'occupied': seat.player, 
+                                 'you': seat.player?.player_id === myPlayerId 
+                             }">
+                            <div class="seat-number" x-text="seat.number"></div>
+                            <template x-if="seat.player">
+                                <div>
+                                    <div class="seat-player" x-text="seat.player.username"></div>
+                                    <div class="seat-chips" x-text="(seat.player.chip_stack || 0).toLocaleString() + ' chips'"></div>
+                                </div>
+                            </template>
+                            <template x-if="!seat.player">
+                                <div class="seat-empty">Empty</div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Active Game Status -->
+            <div x-show="activeGame" class="game-status">
+                <div>🎮 Game in Progress</div>
+                <button class="btn btn-primary" 
+                        style="margin-top: 0.75rem; flex: none; padding: 0.5rem 1.5rem;"
+                        @click="joinActiveGame">Join Game</button>
+            </div>
+
+            <!-- Actions -->
+            <div class="action-section" x-show="!activeGame">
+                <h3 style="margin: 0 0 1rem 0; font-size: 1.1rem;">Table Actions</h3>
+                
+                <!-- Join Table (if not seated) -->
+                <template x-if="!isSeated">
+                    <div>
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.875rem;">
+                            You need to join the table before you can play.
+                        </p>
+                        <div class="action-buttons">
+                            <button class="btn btn-primary" 
+                                    @click="joinTable" 
+                                    :disabled="actionInProgress || (table?.current_players >= table?.max_players)">
+                                <span x-show="!actionInProgress">Join Table</span>
+                                <span x-show="actionInProgress">Joining...</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Seated Player Actions -->
+                <template x-if="isSeated">
+                    <div>
+                        <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.875rem;">
+                            <span x-text="table?.current_players"></span> players seated. 
+                            <span x-show="table?.current_players >= 2">Ready to start a game!</span>
+                            <span x-show="table?.current_players < 2">Waiting for more players...</span>
+                        </p>
+                        <div class="action-buttons">
+                            <button class="btn btn-primary" 
+                                    @click="startGame" 
+                                    :disabled="actionInProgress || (table?.current_players < 2)"
+                                    x-show="table?.current_players >= 2">
+                                <span x-show="!actionInProgress">Start Game</span>
+                                <span x-show="actionInProgress">Starting...</span>
+                            </button>
+                            <button class="btn btn-secondary" 
+                                    @click="addChips" 
+                                    :disabled="actionInProgress">
+                                Buy More Chips
+                            </button>
+                            <button class="btn btn-danger" 
+                                    @click="leaveTable" 
+                                    :disabled="actionInProgress">
+                                <span x-show="!actionInProgress">Leave Table</span>
+                                <span x-show="actionInProgress">Leaving...</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <script src="../javascript/auth.js"></script>
+    <script>
+        function tableLobby() {
+            return {
+                loading: true,
+                error: null,
+                user: null,
+                table: null,
+                tableId: null,
+                myPlayerId: null,
+                actionInProgress: false,
+                pollingInterval: null,
+                activeGame: null,
+
+                get isSeated() {
+                    if (!this.table?.players || !this.myPlayerId) return false;
+                    return this.table.players.some(p => p.player_id === this.myPlayerId);
+                },
+
+                get seats() {
+                    const seats = [];
+                    const maxSeats = this.table?.max_players || 9;
+                    
+                    for (let i = 1; i <= maxSeats; i++) {
+                        const player = this.table?.players?.find(p => p.seat_number === i);
+                        seats.push({
+                            number: i,
+                            player: player || null
+                        });
+                    }
+                    return seats;
+                },
+
+                async loadUserInfo() {
+                    try {
+                        const userData = getUserData();
+                        if (userData) {
+                            this.user = userData;
+                            this.myPlayerId = userData.player_id;
+                        }
+                    } catch (error) {
+                        console.error('Failed to load user info:', error);
+                    }
+                },
+
+                async fetchTableData() {
+                    if (!this.tableId) return;
+
+                    try {
+                        const response = await authenticatedFetch(`/api/tables/${this.tableId}`);
+                        if (!response.ok) {
+                            throw new Error('Failed to fetch table data');
+                        }
+
+                        this.table = await response.json();
+
+                        // Check for active game
+                        try {
+                            const gameResponse = await authenticatedFetch(`/api/games/tables/${this.tableId}/active-game`);
+                            if (gameResponse.ok) {
+                                this.activeGame = await gameResponse.json();
+                            } else {
+                                this.activeGame = null;
+                            }
+                        } catch (gameError) {
+                            this.activeGame = null;
+                        }
+
+                        this.error = null;
+                    } catch (error) {
+                        console.error('Error fetching table data:', error);
+                        this.error = error.message;
+                    }
+                },
+
+                async joinTable() {
+                    this.actionInProgress = true;
+                    try {
+                        const chipAmount = prompt('How many chips would you like to buy in with?', '1000');
+                        if (!chipAmount || isNaN(chipAmount) || chipAmount <= 0) {
+                            this.actionInProgress = false;
+                            return;
+                        }
+
+                        const response = await authenticatedFetch(`/api/tables/${this.tableId}/join`, {
+                            method: 'POST',
+                            body: JSON.stringify({ chip_stack: parseInt(chipAmount) })
+                        });
+
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.message);
+                        }
+
+                        // Refresh table data
+                        await this.fetchTableData();
+                        
+                        // Update user balance
+                        await this.loadUserInfo();
+
+                    } catch (error) {
+                        console.error('Join table error:', error);
+                        alert(`Failed to join table: ${error.message}`);
+                    } finally {
+                        this.actionInProgress = false;
+                    }
+                },
+
+                async startGame() {
+                    this.actionInProgress = true;
+                    try {
+                        // Find a dealer seat (just use first seated player for now)
+                        const firstPlayer = this.table.players[0];
+                        const dealerSeat = firstPlayer?.seat_number || 1;
+
+                        const response = await authenticatedFetch('/api/games', {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                table_id: this.tableId,
+                                dealer_seat: dealerSeat
+                            })
+                        });
+
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.message);
+                        }
+
+                        const gameData = await response.json();
+                        
+                        // Navigate to game
+                        window.location.href = `game.html?tableId=${this.tableId}&gameId=${gameData.game_id}`;
+
+                    } catch (error) {
+                        console.error('Start game error:', error);
+                        alert(`Failed to start game: ${error.message}`);
+                    } finally {
+                        this.actionInProgress = false;
+                    }
+                },
+
+                async addChips() {
+                    this.actionInProgress = true;
+                    try {
+                        const chipAmount = prompt('How many additional chips would you like to buy?', '500');
+                        if (!chipAmount || isNaN(chipAmount) || chipAmount <= 0) {
+                            this.actionInProgress = false;
+                            return;
+                        }
+
+                        const response = await authenticatedFetch(`/api/tables/${this.tableId}/chip-stack`, {
+                            method: 'PUT',
+                            body: JSON.stringify({ additional_chips: parseInt(chipAmount) })
+                        });
+
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.message);
+                        }
+
+                        // Refresh table and user data
+                        await this.fetchTableData();
+                        await this.loadUserInfo();
+
+                    } catch (error) {
+                        console.error('Add chips error:', error);
+                        alert(`Failed to add chips: ${error.message}`);
+                    } finally {
+                        this.actionInProgress = false;
+                    }
+                },
+
+                async leaveTable() {
+                    if (!confirm('Are you sure you want to leave the table? Your chips will be returned to your balance.')) {
+                        return;
+                    }
+
+                    this.actionInProgress = true;
+                    try {
+                        const response = await authenticatedFetch(`/api/tables/${this.tableId}/leave`, {
+                            method: 'DELETE'
+                        });
+
+                        if (!response.ok) {
+                            const error = await response.json();
+                            throw new Error(error.message);
+                        }
+
+                        // Go back to home page
+                        window.location.href = 'home.html';
+
+                    } catch (error) {
+                        console.error('Leave table error:', error);
+                        alert(`Failed to leave table: ${error.message}`);
+                    } finally {
+                        this.actionInProgress = false;
+                    }
+                },
+
+                async joinActiveGame() {
+                    if (this.activeGame) {
+                        window.location.href = `game.html?tableId=${this.tableId}&gameId=${this.activeGame.game_id}`;
+                    }
+                },
+
+                startPolling() {
+                    // Poll every 3 seconds for table updates
+                    this.pollingInterval = setInterval(async () => {
+                        if (!this.loading) {
+                            await this.fetchTableData();
+                        }
+                    }, 3000);
+                },
+
+                stopPolling() {
+                    if (this.pollingInterval) {
+                        clearInterval(this.pollingInterval);
+                        this.pollingInterval = null;
+                    }
+                },
+
+                async init() {
+                    try {
+                        // Check authentication
+                        if (!isAuthenticated()) {
+                            window.location.href = 'login.html';
+                            return;
+                        }
+
+                        // Load user info
+                        await this.loadUserInfo();
+
+                        // Get table ID from URL parameter
+                        const urlParams = new URLSearchParams(window.location.search);
+                        this.tableId = urlParams.get('tableId');
+
+                        if (!this.tableId) {
+                            throw new Error('No table ID provided');
+                        }
+
+                        // Load table data
+                        await this.fetchTableData();
+
+                        // Start polling for updates
+                        this.startPolling();
+
+                    } catch (error) {
+                        console.error('Initialization error:', error);
+                        this.error = error.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                // Cleanup when leaving page
+                destroy() {
+                    this.stopPolling();
+                }
+            };
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (window.tableLobbyInstance) {
+                window.tableLobbyInstance.destroy();
+            }
+        });
+    </script>
+</body>
+</html>

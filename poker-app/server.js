@@ -8,7 +8,8 @@ const { router: authRoutes, authenticateToken } = require('./routes/userauth');
 const tablesRoutes = require('./routes/tables');
 const gamesRoutes = require('./routes/games');
 const actionsRoutes = require('./routes/actions');
-const { PokerEngine } = require('./engine');
+const { PokerGameLogic, createGameState, serializeGameState } = require('./engine');
+const { createGameSockets } = require('./sockets/gamesockets');
 const db = require('./db/db');
 
 // Load environment variables
@@ -23,13 +24,17 @@ const io = new Server(server, {
   }
 });
 
+// Initialize game sockets utilities
+const gameSockets = createGameSockets(io);
+
 // Store active poker engines in memory
 const activeGames = new Map();
 
-// Make poker engines and io available to routes
+// Make poker engines, io, and gameSockets available to routes
 app.use((req, res, next) => {
   req.activeGames = activeGames;
   req.io = io;
+  req.gameSockets = gameSockets;
   next();
 });
 

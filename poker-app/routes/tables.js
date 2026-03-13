@@ -30,10 +30,10 @@ router.get('/', async (req, res) => {
     try {
         const query = `
             SELECT t.*, 
-                   COUNT(tp.player_id) as current_players
+                   COUNT(p.player_id) as current_players
             FROM tables t
-            LEFT JOIN table_players tp ON t.table_id = tp.table_id 
-                AND tp.status IN ('active', 'sitting_out')
+            LEFT JOIN players p ON t.table_id = p.table_id 
+                AND p.status IN ('active', 'sitting_out')
             GROUP BY t.table_id
             ORDER BY t.created_at DESC
         `;
@@ -52,10 +52,10 @@ router.get('/current', authenticateToken, async (req, res) => {
         const playerId = req.user.playerId;
         
         const [result] = await db.execute(`
-            SELECT t.table_id, t.name, tp.seat_number, tp.chip_stack, tp.status
-            FROM table_players tp
-            JOIN tables t ON tp.table_id = t.table_id
-            WHERE tp.player_id = ? AND tp.status IN ('active', 'sitting_out')
+            SELECT t.table_id, t.name, p.seat_number, p.chip_balance, p.status
+            FROM players p
+            JOIN tables t ON p.table_id = t.table_id
+            WHERE p.player_id = ? AND p.status IN ('active', 'sitting_out')
             LIMIT 1
         `, [playerId]);
         
@@ -87,11 +87,10 @@ router.get('/:tableId', async (req, res) => {
         
         // Get players at table
         const [playersResult] = await db.execute(`
-            SELECT tp.*, p.username, p.chip_balance
-            FROM table_players tp
-            JOIN players p ON tp.player_id = p.player_id
-            WHERE tp.table_id = ? AND tp.status != 'left'
-            ORDER BY tp.seat_number
+            SELECT p.player_id, p.username, p.chip_balance, p.seat_number, p.status, p.joined_at
+            FROM players p
+            WHERE p.table_id = ? AND p.status IN ('active', 'sitting_out')
+            ORDER BY p.seat_number
         `, [tableId]);
         
         const table = {
@@ -110,7 +109,7 @@ router.get('/:tableId', async (req, res) => {
 // POST /tables - Create new table
 router.post('/', authenticateToken, async (req, res) => {
     try {
-        const { name, max_players = 9, small_blind = 10, big_blind = 20 } = req.body;
+        const { name, max_players = 9, small_blind = 10, big_blind = 20, dealer_seat = 1 } = req.body;
         
         // Validate input
         if (!name || name.trim().length === 0) {
@@ -125,6 +124,10 @@ router.post('/', authenticateToken, async (req, res) => {
             return res.status(400).json({ message: 'Invalid blind structure' });
         }
         
+        if (dealer_seat < 1 || dealer_seat > max_players) {
+            return res.status(400).json({ message: 'Dealer seat must be between 1 and max_players' });
+        }
+        
         // Check if table name already exists
         const [existingTable] = await db.execute(
             'SELECT table_id FROM tables WHERE name = ?', 
@@ -136,9 +139,9 @@ router.post('/', authenticateToken, async (req, res) => {
         }
         
         const [result] = await db.execute(`
-            INSERT INTO tables (name, max_players, small_blind, big_blind, status)
-            VALUES (?, ?, ?, ?, 'waiting')
-        `, [name.trim(), max_players, small_blind, big_blind]);
+            INSERT INTO tables (name, max_players, small_blind, big_blind, dealer_seat, status)
+            VALUES (?, ?, ?, ?, ?, 'waiting')
+        `, [name.trim(), max_players, small_blind, big_blind, dealer_seat]);
         
         res.status(201).json({
             message: 'Table created successfully',
@@ -154,7 +157,7 @@ router.post('/', authenticateToken, async (req, res) => {
 router.put('/:tableId', authenticateToken, async (req, res) => {
     try {
         const { tableId } = req.params;
-        const { name, max_players, small_blind, big_blind, status } = req.body;
+        const { name, max_players, small_blind, big_blind, dealer_seat, status } = req.body;
         
         // Check if table exists
         const [tableResult] = await db.execute(
@@ -187,6 +190,13 @@ router.put('/:tableId', authenticateToken, async (req, res) => {
         if (big_blind) {
             updateFields.push('big_blind = ?');
             values.push(big_blind);
+        }
+        if (dealer_seat) {
+            if (dealer_seat < 1 || dealer_seat > (max_players || tableResult[0].max_players)) {
+                return res.status(400).json({ message: 'Dealer seat must be between 1 and max_players' });
+            }
+            updateFields.push('dealer_seat = ?');
+            values.push(dealer_seat);
         }
         if (status) {
             if (!['waiting', 'active', 'closed'].includes(status)) {
@@ -222,7 +232,6 @@ router.put('/:tableId', authenticateToken, async (req, res) => {
 router.post('/:tableId/join', authenticateToken, async (req, res) => {
     try {
         const { tableId } = req.params;
-        const { chip_stack = 1000 } = req.body;
         const playerId = req.user.playerId;
         
         // Start transaction
@@ -242,21 +251,21 @@ router.post('/:tableId/join', authenticateToken, async (req, res) => {
             
             const table = tableResult[0];
             
-            // Check if player is already at this table
-            const [existingPlayer] = await db.execute(
-                'SELECT * FROM table_players WHERE table_id = ? AND player_id = ? AND status != "left"', 
-                [tableId, playerId]
+            // Check if player is already at a table
+            const [playerResult] = await db.execute(
+                'SELECT table_id, chip_balance FROM players WHERE player_id = ?', 
+                [playerId]
             );
             
-            if (existingPlayer.length > 0) {
+            if (playerResult[0].table_id !== null) {
                 await db.query('ROLLBACK');
-                return res.status(409).json({ message: 'Already seated at this table' });
+                return res.status(409).json({ message: 'Already seated at a table' });
             }
             
             // Get current player count
             const [playerCount] = await db.execute(`
                 SELECT COUNT(*) as count 
-                FROM table_players 
+                FROM players 
                 WHERE table_id = ? AND status IN ('active', 'sitting_out')
             `, [tableId]);
             
@@ -268,8 +277,8 @@ router.post('/:tableId/join', authenticateToken, async (req, res) => {
             // Find next available seat
             const [occupiedSeats] = await db.execute(`
                 SELECT seat_number 
-                FROM table_players 
-                WHERE table_id = ? AND status != 'left'
+                FROM players 
+                WHERE table_id = ? AND status IN ('active', 'sitting_out')
                 ORDER BY seat_number
             `, [tableId]);
             
@@ -285,28 +294,12 @@ router.post('/:tableId/join', authenticateToken, async (req, res) => {
                 return res.status(409).json({ message: 'No available seats' });
             }
             
-            // Check player has enough chips
-            const [playerResult] = await db.execute(
-                'SELECT chip_balance FROM players WHERE player_id = ?', 
-                [playerId]
-            );
-            
-            if (playerResult[0].chip_balance < chip_stack) {
-                await db.query('ROLLBACK');
-                return res.status(400).json({ message: 'Insufficient chip balance' });
-            }
-            
-            // Add player to table
+            // Update player to join table
             await db.execute(`
-                INSERT INTO table_players (table_id, player_id, seat_number, chip_stack, status)
-                VALUES (?, ?, ?, ?, 'active')
-            `, [tableId, playerId, nextSeat, chip_stack]);
-            
-            // Update player's chip balance
-            await db.execute(
-                'UPDATE players SET chip_balance = chip_balance - ? WHERE player_id = ?', 
-                [chip_stack, playerId]
-            );
+                UPDATE players 
+                SET table_id = ?, seat_number = ?, status = 'active', joined_at = NOW()
+                WHERE player_id = ?
+            `, [tableId, nextSeat, playerId]);
             
             // Update table status if this is the first player
             if (playerCount[0].count === 0) {
@@ -321,7 +314,7 @@ router.post('/:tableId/join', authenticateToken, async (req, res) => {
             res.json({
                 message: 'Successfully joined table',
                 seat_number: nextSeat,
-                chip_stack: chip_stack
+                chip_balance: playerResult[0].chip_balance
             });
             
         } catch (error) {
@@ -398,7 +391,7 @@ async function leaveTableHelper(tableId, playerId) {
     try {
         // Check if player is at this table
         const [playerResult] = await db.execute(
-            'SELECT * FROM table_players WHERE table_id = ? AND player_id = ? AND status != "left"', 
+            'SELECT * FROM players WHERE table_id = ? AND player_id = ? AND status IN ("active", "sitting_out")', 
             [tableId, playerId]
         );
         
@@ -410,34 +403,28 @@ async function leaveTableHelper(tableId, playerId) {
         const player = playerResult[0];
         
         // Check if player is in an active game
-        const [activeGame] = await db.execute(`
-            SELECT g.game_id 
-            FROM games g 
-            JOIN game_players gp ON g.game_id = gp.game_id 
-            WHERE g.table_id = ? AND gp.player_id = ? AND g.ended_at IS NULL
-        `, [tableId, playerId]);
-        
-        if (activeGame.length > 0) {
-            await db.query('ROLLBACK');
-            throw new Error('Cannot leave table during active game');
+        if (player.game_id !== null) {
+            const [activeGame] = await db.execute(
+                'SELECT game_id FROM games WHERE game_id = ? AND ended_at IS NULL', 
+                [player.game_id]
+            );
+            
+            if (activeGame.length > 0) {
+                await db.query('ROLLBACK');
+                throw new Error('Cannot leave table during active game');
+            }
         }
         
-        // Update player status to 'left'
+        // Clear player's table info
         await db.execute(
-            'UPDATE table_players SET status = "left" WHERE table_player_id = ?', 
-            [player.table_player_id]
-        );
-        
-        // Return chips to player
-        await db.execute(
-            'UPDATE players SET chip_balance = chip_balance + ? WHERE player_id = ?', 
-            [player.chip_stack, playerId]
+            'UPDATE players SET table_id = NULL, seat_number = NULL, status = "offline" WHERE player_id = ?', 
+            [playerId]
         );
         
         // Check if table is now empty and update status
         const [remainingPlayers] = await db.execute(`
             SELECT COUNT(*) as count 
-            FROM table_players 
+            FROM players 
             WHERE table_id = ? AND status IN ('active', 'sitting_out')
         `, [tableId]);
         
@@ -463,16 +450,15 @@ router.get('/:tableId/players', async (req, res) => {
         
         const [players] = await db.execute(`
             SELECT 
-                tp.seat_number,
-                tp.chip_stack,
-                tp.status,
-                tp.joined_at,
+                p.seat_number,
+                p.chip_balance,
+                p.status,
+                p.joined_at,
                 p.username,
                 p.player_id
-            FROM table_players tp
-            JOIN players p ON tp.player_id = p.player_id
-            WHERE tp.table_id = ? AND tp.status != 'left'
-            ORDER BY tp.seat_number
+            FROM players p
+            WHERE p.table_id = ? AND p.status IN ('active', 'sitting_out')
+            ORDER BY p.seat_number
         `, [tableId]);
         
         res.json(players);
@@ -489,7 +475,7 @@ router.post('/:tableId/sit-out', authenticateToken, async (req, res) => {
         const playerId = req.user.playerId;
 
         const [result] = await db.execute(
-            'UPDATE table_players SET status = "sitting_out" WHERE table_id = ? AND player_id = ? AND status = "active"',
+            'UPDATE players SET status = "sitting_out" WHERE table_id = ? AND player_id = ? AND status = "active"',
             [tableId, playerId]
         );
         
@@ -511,7 +497,7 @@ router.post('/:tableId/sit-in', authenticateToken, async (req, res) => {
         const playerId = req.user.playerId;
         
         const [result] = await db.execute(
-            'UPDATE table_players SET status = "active" WHERE table_id = ? AND player_id = ? AND status = "sitting_out"', 
+            'UPDATE players SET status = "active" WHERE table_id = ? AND player_id = ? AND status = "sitting_out"', 
             [tableId, playerId]
         );
         
@@ -526,7 +512,7 @@ router.post('/:tableId/sit-in', authenticateToken, async (req, res) => {
     }
 });
 
-// PUT /tables/:tableId/chip-stack - Update chip stack (buy more chips)
+// PUT /tables/:tableId/chip-stack - Update chip balance (add more chips)
 router.put('/:tableId/chip-stack', authenticateToken, async (req, res) => {
     try {
         const { tableId } = req.params;
@@ -537,58 +523,30 @@ router.put('/:tableId/chip-stack', authenticateToken, async (req, res) => {
             return res.status(400).json({ message: 'Invalid chip amount' });
         }
         
-        // Start transaction
-        await db.query('START TRANSACTION');
+        // Check if player is at table
+        const [playerResult] = await db.execute(
+            'SELECT * FROM players WHERE table_id = ? AND player_id = ? AND status IN ("active", "sitting_out")', 
+            [tableId, playerId]
+        );
         
-        try {
-            // Check if player is at table
-            const [playerResult] = await db.execute(
-                'SELECT * FROM table_players WHERE table_id = ? AND player_id = ? AND status != "left"', 
-                [tableId, playerId]
-            );
-            
-            if (playerResult.length === 0) {
-                await db.query('ROLLBACK');
-                return res.status(404).json({ message: 'Not seated at this table' });
-            }
-            
-            // Check player balance
-            const [balanceResult] = await db.execute(
-                'SELECT chip_balance FROM players WHERE player_id = ?', 
-                [playerId]
-            );
-            
-            if (balanceResult[0].chip_balance < additional_chips) {
-                await db.query('ROLLBACK');
-                return res.status(400).json({ message: 'Insufficient chip balance' });
-            }
-            
-            // Update chip stack and balance
-            await db.execute(
-                'UPDATE table_players SET chip_stack = chip_stack + ? WHERE table_id = ? AND player_id = ?', 
-                [additional_chips, tableId, playerId]
-            );
-            
-            await db.execute(
-                'UPDATE players SET chip_balance = chip_balance - ? WHERE player_id = ?', 
-                [additional_chips, playerId]
-            );
-            
-            await db.query('COMMIT');
-            
-            res.json({
-                message: 'Chip stack updated successfully',
-                chips_added: additional_chips
-            });
-            
-        } catch (error) {
-            await db.query('ROLLBACK');
-            throw error;
+        if (playerResult.length === 0) {
+            return res.status(404).json({ message: 'Not seated at this table' });
         }
         
+        // Update chip balance
+        await db.execute(
+            'UPDATE players SET chip_balance = chip_balance + ? WHERE player_id = ?', 
+            [additional_chips, playerId]
+        );
+        
+        res.json({
+            message: 'Chip balance updated successfully',
+            chips_added: additional_chips
+        });
+        
     } catch (error) {
-        console.error('Error updating chip stack:', error);
-        res.status(500).json({ message: 'Failed to update chip stack' });
+        console.error('Error updating chip balance:', error);
+        res.status(500).json({ message: 'Failed to update chip balance' });
     }
 });
 

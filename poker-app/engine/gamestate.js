@@ -19,4 +19,33 @@ class GameState{
         this.communityCards = [];
     }
 
+    getGameState() {
+        return {
+            game_id: this.game_id,
+            maxPlayer: this.maxPlayers,
+            dealerSeat: this.dealerSeat,
+            smallBlind: this.smallBlind,
+            bigBlind: this.bigBlind,
+            hotseat: this.hotseat,
+            sbSeat: this.sbSeat,
+            bbSeat: this.bbSeat,
+            aggRounds: this.aggRounds,
+            pot: this.pot,
+            stage: this.stage,
+            currentBet: this.currentBet,
+            bets: this.bets,
+            communityCards: this.communityCards
+        };
+    }
+
+    set(field, value) {
+        if (!(field in this)) {
+            throw new Error(`Field ${field} does not exist in GameState`);
+        }
+        this[field] = value;
+    }
+
+    
 }
+
+module.exports = new GameState();

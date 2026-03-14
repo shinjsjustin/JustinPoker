@@ -4,7 +4,7 @@ const Hand = require('pokersolver').Hand;
 // POKER GAME LOGIC — Using pokersolver
 // ─────────────────────────────────────────
 
-class PokerGameLogic {
+class PokerCards {
     constructor() {
         // Standard 52-card deck
         this.suits = ['h', 'd', 'c', 's']; // hearts, diamonds, clubs, spades
@@ -393,4 +393,4 @@ class PokerGameLogic {
 }
 
 // Export singleton instance
-module.exports = new PokerGameLogic();
+module.exports = new PokerCards();

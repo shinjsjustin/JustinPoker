@@ -8,7 +8,7 @@ const { router: authRoutes } = require('./routes/userauth');
 const tablesRoutes = require('./routes/tables');
 const gamesRoutes = require('./routes/games');
 const actionsRoutes = require('./routes/actions');
-const { createGameSockets } = require('./sockets/gamesockets');
+const { createGameSockets } = require('./sockets/gamesockets-old');
 const db = require('./db/db');
 
 // Load environment variables

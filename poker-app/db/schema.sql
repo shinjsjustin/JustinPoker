@@ -46,7 +46,7 @@ CREATE TABLE tables (
   small_blind INT          NOT NULL DEFAULT 10,
   big_blind   INT          NOT NULL DEFAULT 20,
   dealer_seat TINYINT      NOT NULL DEFAULT 1,
-  status      ENUM('waiting','active','closed') NOT NULL DEFAULT 'waiting',
+  seats       JSON         NULL,
   created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
   PRIMARY KEY (table_id)
@@ -56,31 +56,21 @@ CREATE TABLE tables (
 CREATE TABLE games (
   game_id         INT     NOT NULL AUTO_INCREMENT,
   table_id        INT     NOT NULL,
-  pot             INT     NOT NULL DEFAULT 0,
-  community_cards JSON,
-  stage           ENUM('waiting','pre_flop','flop','turn','river','showdown','game_over') NOT NULL DEFAULT 'waiting',
   dealer_seat     TINYINT NOT NULL DEFAULT 0,
-  active_seat     TINYINT,
+  hot_seat        TINYINT NULL,
+  stage           TINYINT NOT NULL DEFAULT 0,
+  aggrounds       TINYINT NULL, 
+
+  pot             INT     NOT NULL DEFAULT 0,
+  current_bet     INT     NOT NULL DEFAULT 0,
+  bets            JSON    NULL,
+  community_cards JSON    NULL,
+
   started_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   ended_at        TIMESTAMP NULL,
 
   PRIMARY KEY (game_id),
   FOREIGN KEY (table_id) REFERENCES tables(table_id)
-);
-
--- 6. ACTIONS (event log — source of truth for replays & recovery)
-CREATE TABLE actions (
-  action_id   INT  NOT NULL AUTO_INCREMENT,
-  game_id     INT  NOT NULL,
-  player_id   INT  NOT NULL,
-  action_type ENUM('fold','check','call','raise','all_in','blind') NOT NULL,
-  amount      INT  NOT NULL DEFAULT 0,
-  stage       ENUM('waiting','pre_flop','flop','turn','river','showdown','game_over') NOT NULL,
-  acted_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-  PRIMARY KEY (action_id),
-  FOREIGN KEY (game_id)   REFERENCES games(game_id),
-  FOREIGN KEY (player_id) REFERENCES players(player_id)
 );
 
 -- ─────────────────────────────────────────

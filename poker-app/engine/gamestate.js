@@ -19,6 +19,7 @@ class GameState{
         this.communityCards = [];
     }
 
+    // Getter
     getGameState() {
         return {
             game_id: this.game_id,
@@ -38,6 +39,7 @@ class GameState{
         };
     }
 
+    // Setter
     set(field, value) {
         if (!(field in this)) {
             throw new Error(`Field ${field} does not exist in GameState`);
@@ -45,7 +47,12 @@ class GameState{
         this[field] = value;
     }
 
-    
+    // Calculators
+    interrogateHotSeat() {
+        const hotSeatBet = this.bets.find(bet => bet.seat === this.hotseat) - this.currentBet;
+        if (hotSeatBet > 0) {
+            
+    }
 }
 
 module.exports = new GameState();
